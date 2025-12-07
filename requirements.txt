@@ -1,20 +1,6 @@
-Core data handling and numerical computation
-
+streamlit
 pandas
 numpy
-
-Machine Learning framework (for the RandomForestClassifier, StandardScaler, and LabelEncoder)
-
 scikit-learn
-
-Web Application Framework
-
-streamlit
-
-Serialization library (used for saving/loading the model artifact)
-
-We include both for robustness, as scikit-learn often uses joblib under the hood
-
-even when saving via the standard library method.
-
-joblib
+seaborn
+matplotlib

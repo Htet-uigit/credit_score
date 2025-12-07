@@ -7,7 +7,7 @@ import os
 # --- Configuration ---
 # This file is expected to be created by the optimization script: 
 # model_rf_optimized.pkl
-MODEL_FILE = 'model_rf_optimized.pkl'
+MODEL_FILE = 'model.pkl'
 
 # --- 1. Model Loading (Using Python's built-in pickle) ---
 
@@ -212,3 +212,4 @@ st.sidebar.markdown(
     """
 
 )
+

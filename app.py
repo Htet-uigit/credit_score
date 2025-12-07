@@ -3,7 +3,11 @@ import pandas as pd
 import numpy as np
 import pickle # <-- Confirmed use of pickle
 import os
+from sklearn.preprocessing import LabelEncoder
 
+# --- Configuration ---
+# This file is expected to be created by the optimization script: 
+# model_rf_optimized.pkl
 MODEL_FILE = 'model_rf_optimized.pkl'
 
 # --- 1. Model Loading (Using Python's built-in pickle) ---
@@ -208,4 +212,3 @@ st.sidebar.markdown(
     * **Loader:** `pickle`
     """
 )
-

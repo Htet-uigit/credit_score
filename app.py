@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import pickle # <-- Confirmed use of pickle
 import os
-from sklearn.preprocessing import LabelEncoder
 
 # --- Configuration ---
 # This file is expected to be created by the optimization script: 
@@ -211,4 +210,5 @@ st.sidebar.markdown(
     * **Model File:** `{MODEL_FILE}`
     * **Loader:** `pickle`
     """
+
 )

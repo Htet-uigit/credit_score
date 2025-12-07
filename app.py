@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import joblib
 import numpy as np
 
 # Page Config
@@ -11,7 +10,7 @@ st.set_page_config(page_title="Credit Score Predictor", layout="wide")
 # Load the saved model and artifacts
 @st.cache_resource
 def load_model():
-    """Loads the model and artifacts from the 'model.pkl' file."""
+    """ Loads the model and artifacts from the 'model.pkl' file."""
     try:
         data = joblib.load('model.pkl')
         
@@ -241,4 +240,5 @@ if data is not None:
             )
             
             # Display bar chart
+
             st.bar_chart(prob_df.sort_values(by='Probability', ascending=False), color="#008080")

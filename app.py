@@ -1,3 +1,4 @@
+import joblib 
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -241,4 +242,5 @@ if data is not None:
             
             # Display bar chart
             st.bar_chart(prob_df.sort_values(by='Probability', ascending=False), color="#008080")
+
 

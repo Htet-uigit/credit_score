@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import pickle # <-- Confirmed use of pickle
 import os
-from sklearn.preprocessing import LabelEncoder
 
 MODEL_FILE = 'model_rf_optimized.pkl'
 
@@ -209,3 +208,4 @@ st.sidebar.markdown(
     * **Loader:** `pickle`
     """
 )
+

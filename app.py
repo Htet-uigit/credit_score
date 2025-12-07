@@ -1,215 +1,244 @@
 import streamlit as st
 import pandas as pd
+import joblib
 import numpy as np
-import pickle # <-- Confirmed use of pickle
-import os
 
-# --- Configuration ---
-# This file is expected to be created by the optimization script: 
-# model_rf_optimized.pkl
-MODEL_FILE = 'model.pkl'
+# Page Config
+st.set_page_config(page_title="Credit Score Predictor", layout="wide")
 
-# --- 1. Model Loading (Using Python's built-in pickle) ---
+# --- Model Loading ---
 
-# Use st.cache_resource for heavy objects like models and transformers
+# Load the saved model and artifacts
 @st.cache_resource
 def load_model():
-    """Loads the model and all transformers using pickle."""
-    if not os.path.exists(MODEL_FILE):
-        # A clear instruction if the required model file is missing
-        st.error(f"Error: Model file '{MODEL_FILE}' not found. Please ensure it is in the root directory.")
-        return None
-    
+    """Loads the model and artifacts from the 'model.pkl' file."""
     try:
-        # Standard Python file opening and pickle loading
-        with open(MODEL_FILE, 'rb') as file:
-            data = pickle.load(file)
+        data = joblib.load('model.pkl')
         
-        st.success("Model artifacts loaded successfully (using pickle).")
-        
-        # Validation check for required components
-        required_keys = ['model', 'encoders', 'target_encoder', 'scaler', 'feature_names']
+        # Critical check to ensure all expected keys are present
+        required_keys = ['model', 'encoders', 'target_encoder', 'scaler', 'loan_mlb', 'feature_names']
         for key in required_keys:
             if key not in data:
-                st.error(f"Model artifact is missing required key: '{key}'. Cannot run prediction.")
+                st.error(f"Model artifact is missing required key: '{key}'. Please check your training script.")
                 return None
-        
         return data
-
+    except FileNotFoundError:
+        st.error("Model file 'model.pkl' not found. Please ensure the file is in the same directory.")
+        return None
     except Exception as e:
-        st.error(f"Error loading model using pickle: {e}. If the model was saved with joblib, you should use joblib.load().")
+        st.error(f"An error occurred while loading the model: {e}")
         return None
 
-# Load all artifacts immediately
-ARTIFACTS = load_model()
+# --- Prediction Function ---
 
-if ARTIFACTS is None:
-    st.stop()
-
-# Extract components from the loaded dictionary
-model = ARTIFACTS['model']
-encoders = ARTIFACTS['encoders']
-target_encoder = ARTIFACTS['target_encoder']
-scaler = ARTIFACTS['scaler']
-FEATURE_NAMES = ARTIFACTS['feature_names']
-
-# --- 2. Streamlit UI and Prediction Logic ---
-
-st.set_page_config(
-    page_title="Credit Score Predictor",
-    layout="centered",
-    initial_sidebar_state="auto"
-)
-
-st.title("Credit Score Predictor (Random Forest)")
-st.markdown("Enter the customer details below to predict their **Credit Score**.")
-
-# --- Define Categorical Options (from encoders) ---
-
-def get_encoder_map(encoder):
-    """Creates a user-friendly map from the LabelEncoder's classes_ array."""
+def predict_score(input_data, model, encoders, target_encoder, scaler, loan_mlb, feature_names):
+    """
+    Processes user inputs, scales them, and performs prediction using the loaded model.
+    """
     try:
-        # Check if the object has the classes_ attribute (standard for sklearn encoders)
-        if hasattr(encoder, 'classes_'):
-            return {cls: i for i, cls in enumerate(encoder.classes_)}
-        else:
-            return {}
-    except:
-        return {}
+        # --- 1. Extract Raw Inputs ---
+        age = input_data['age']
+        annual_income = input_data['annual_income']
+        monthly_salary = input_data['monthly_salary']
+        occupation = input_data['occupation']
+        num_bank_accounts = input_data['num_bank_accounts']
+        num_credit_cards = input_data['num_credit_cards']
+        interest_rate = input_data['interest_rate']
+        num_loans = input_data['num_loans']
+        outstanding_debt = input_data['outstanding_debt']
+        credit_utilization = input_data['credit_utilization']
+        credit_history_years = input_data['credit_history_years']
+        credit_mix = input_data['credit_mix']
+        delay_from_due = input_data['delay_from_due']
+        num_delayed_payment = input_data['num_delayed_payment']
+        changed_credit_limit = input_data['changed_credit_limit']
+        num_credit_inquiries = input_data['num_credit_inquiries']
+        payment_min = input_data['payment_min']
+        payment_behaviour = input_data['payment_behaviour']
+        selected_loans = input_data['selected_loans']
 
-
-OCCUPATION_MAP = get_encoder_map(encoders.get('Occupation', LabelEncoder()))
-CREDIT_MIX_MAP = get_encoder_map(encoders.get('Credit_Mix', LabelEncoder()))
-PAYMENT_MIN_MAP = get_encoder_map(encoders.get('Payment_of_Min_Amount', LabelEncoder()))
-PAYMENT_BEHAVIOUR_MAP = get_encoder_map(encoders.get('Payment_Behaviour', LabelEncoder()))
-
-# --- Input Fields ---
-
-input_data = {}
-
-# Use st.form to group inputs and prevent unnecessary recalculations
-with st.form("prediction_form"):
-    
-    st.header("Personal & Financial Information")
-    col1, col2 = st.columns(2)
-
-    with col1:
-        input_data['Age'] = st.number_input("Age", min_value=18, max_value=90, value=30, key='age')
-        input_data['Annual_Income'] = st.number_input("Annual Income ($)", min_value=10000.0, value=75000.0, step=1000.0, key='income')
-        input_data['Monthly_Inhand_Salary'] = st.number_input("Monthly In-hand Salary ($)", min_value=500.0, value=6250.0, step=100.0, key='salary')
+        # --- 2. Encode Categoricals ---
+        occ_enc = encoders['Occupation'].transform([occupation])[0]
+        mix_enc = encoders['Credit_Mix'].transform([credit_mix])[0]
+        pay_min_enc = encoders['Payment_of_Min_Amount'].transform([payment_min])[0]
+        pay_beh_enc = encoders['Payment_Behaviour'].transform([payment_behaviour])[0]
         
-    with col2:
-        occupation_selection = st.selectbox("Occupation", options=list(OCCUPATION_MAP.keys()), key='occupation')
-        # Use .get() for safe lookup, defaulting to 0 if key is missing (should not happen if maps are correct)
-        input_data['Occupation'] = OCCUPATION_MAP.get(occupation_selection, 0)
-        input_data['Num_Bank_Accounts'] = st.number_input("Number of Bank Accounts", min_value=0, max_value=10, value=3, key='bank_acct')
-        input_data['Num_Credit_Card'] = st.number_input("Number of Credit Cards", min_value=0, max_value=15, value=4, key='cc_num')
-
-
-    st.header("Credit History & Debt")
-    col3, col4 = st.columns(2)
-
-    with col3:
-        input_data['Interest_Rate'] = st.slider("Interest Rate (%)", min_value=1, max_value=35, value=15, key='interest')
-        input_data['Num_of_Loan'] = st.number_input("Number of Loans", min_value=0, max_value=20, value=5, key='loan_num')
-        input_data['Delay_from_due_date'] = st.number_input("Average Delay (Days)", min_value=0, max_value=100, value=15, key='delay')
-        input_data['Num_of_Delayed_Payment'] = st.number_input("Number of Delayed Payments", min_value=0, max_value=30, value=6, key='delayed_pay')
-        input_data['Changed_Credit_Limit'] = st.number_input("Change in Credit Limit (%)", min_value=-50.0, max_value=100.0, value=10.0, key='limit_change')
+        # --- 3. Feature Engineering ---
+        history_months = credit_history_years * 12
         
-    with col4:
-        input_data['Num_Credit_Inquiries'] = st.number_input("Credit Inquiries (Last 6 months)", min_value=0, max_value=25, value=3, key='inquiries')
-        credit_mix_selection = st.selectbox("Credit Mix", options=list(CREDIT_MIX_MAP.keys()), key='credit_mix')
-        input_data['Credit_Mix'] = CREDIT_MIX_MAP.get(credit_mix_selection, 0)
-        input_data['Outstanding_Debt'] = st.number_input("Outstanding Debt ($)", min_value=0.0, value=8000.0, step=100.0, key='debt')
-        input_data['Credit_Utilization_Ratio'] = st.slider("Credit Utilization Ratio (%)", min_value=0.0, max_value=100.0, value=35.0, step=0.1, key='utilization')
-        input_data['Credit_History_Age'] = st.number_input("Credit History Age (Months)", min_value=0, value=100, key='history_age')
+        # --- 4. Loan Feature Vector (MultiLabelBinarizer) ---
+        loan_feature_vector = [0] * len(loan_mlb.classes_)
+        for loan in selected_loans:
+            # Find the index of the selected loan type in the MLB classes
+            idx = np.where(loan_mlb.classes_ == loan)[0][0]
+            loan_feature_vector[idx] = 1
+            
+        loan_feature_columns = [f for f in feature_names if f.startswith('Has_')]
 
-
-    st.header("Payment Behavior")
-    col5, col6 = st.columns(2)
-
-    with col5:
-        min_pay_selection = st.selectbox("Payment of Minimum Amount", options=list(PAYMENT_MIN_MAP.keys()), key='min_pay')
-        input_data['Payment_of_Min_Amount'] = PAYMENT_MIN_MAP.get(min_pay_selection, 0)
-        input_data['Total_EMI_per_month'] = st.number_input("Total EMI per Month ($)", min_value=0.0, value=500.0, step=10.0, key='emi')
+        # --- 5. Create Final Input Dictionary (CRITICAL: Must match feature_names) ---
+        input_dict = {
+             'Age': age, 
+             'Occupation': occ_enc, 
+             'Annual_Income': annual_income, 
+             'Monthly_Inhand_Salary': monthly_salary, 
+             'Num_Bank_Accounts': num_bank_accounts, 
+             'Num_Credit_Card': num_credit_cards, 
+             'Interest_Rate': interest_rate, 
+             'Num_of_Loan': num_loans, 
+             'Delay_from_due_date': delay_from_due, 
+             'Num_of_Delayed_Payment': num_delayed_payment, 
+             'Changed_Credit_Limit': changed_credit_limit, 
+             'Num_Credit_Inquiries': num_credit_inquiries, 
+             'Credit_Mix': mix_enc, 
+             'Outstanding_Debt': outstanding_debt, 
+             'Credit_Utilization_Ratio': credit_utilization, 
+             'Credit_History_Age': history_months, 
+             'Payment_of_Min_Amount': pay_min_enc, 
+             'Payment_Behaviour': pay_beh_enc,
+             
+             # Defaulted features (missing from app UI, assumed imputed to 0.0 in training)
+             'Total_EMI_per_month': 0.0, 
+             'Amount_invested_monthly': 0.0, 
+             'Monthly_Balance': 0.0,
+        }
         
-    with col6:
-        pay_behavior_selection = st.selectbox("Payment Behaviour", options=list(PAYMENT_BEHAVIOUR_MAP.keys()), key='pay_behavior')
-        input_data['Payment_Behaviour'] = PAYMENT_BEHAVIOUR_MAP.get(pay_behavior_selection, 0)
-        input_data['Amount_invested_monthly'] = st.number_input("Amount Invested Monthly ($)", min_value=0.0, value=200.0, step=10.0, key='invested')
-        input_data['Monthly_Balance'] = st.number_input("Monthly Balance ($)", min_value=0.0, value=3000.0, step=100.0, key='balance')
+        # Merge loan features into the dictionary
+        for col_name, value in zip(loan_feature_columns, loan_feature_vector):
+            input_dict[col_name] = value
+
+        # --- 6. Create DataFrame (Order is guaranteed by feature_names) ---
+        input_df = pd.DataFrame([input_dict])[feature_names]
         
-    # Ensure all features expected by the model are present, setting missing ones to a safe default (like 0.0)
-    # This prevents the model from failing if a feature was included in training but is missing from the simplified UI
-    for feature in FEATURE_NAMES:
-        if feature not in input_data:
-            input_data[feature] = 0.0
-
-    submit_button = st.form_submit_button("Predict Credit Score", type="primary")
-
-# --- Prediction Logic ---
-if submit_button:
-    
-    try:
-        # 1. Convert input data to a DataFrame in the correct feature order
-        input_df = pd.DataFrame([input_data])
-        # IMPORTANT: Select and order columns according to FEATURE_NAMES from the artifact
-        input_df = input_df[FEATURE_NAMES] 
-
-        # 2. Scale the input features
-        X_scaled = scaler.transform(input_df)
-
-        # 3. Predict the encoded score (0, 1, or 2)
-        with st.spinner('Calculating prediction...'):
-            prediction_encoded = model.predict(X_scaled)[0]
-            probability = model.predict_proba(X_scaled)
-
-        # 4. Inverse transform to get the human-readable score
-        prediction_label = target_encoder.inverse_transform([prediction_encoded])[0]
-
-        st.subheader("Prediction Result")
+        # --- 7. Scale and Predict ---
+        input_scaled = scaler.transform(input_df)
+        prediction = model.predict(input_scaled)
+        probability = model.predict_proba(input_scaled)
         
-        score_color = ""
-        if prediction_label == 'Good':
-            score_color = "green"
-        elif prediction_label == 'Standard':
-            score_color = "orange"
-        else: # Poor
-            score_color = "red"
+        class_name = target_encoder.inverse_transform(prediction)[0]
+        
+        return class_name, probability, target_encoder.classes_
 
-        st.markdown(
-            f"""
-            <div style="padding: 15px; border-radius: 10px; background-color: #f0f2f6; text-align: center;">
-                <p style="font-size: 16px; margin: 0;">The Predicted Credit Score is:</p>
-                <h1 style="color: {score_color}; margin: 5px 0 0 0;">{prediction_label}</h1>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        
-        # Display Probabilities
-        st.markdown("---")
-        st.subheader("Confidence Scores")
-        
-        prob_df = pd.DataFrame(probability.T, index=target_encoder.classes_, columns=['Probability'])
-        
-        st.dataframe(
-            prob_df.sort_values(by='Probability', ascending=False)
-            .style.format({'Probability': "{:.2%}"})
-        )
-        st.bar_chart(prob_df.sort_values(by='Probability', ascending=False))
-
+    except ValueError as e:
+        st.error(f"Prediction Error: A categorical value was not recognized by the model. Please check the inputs. Detail: {e}")
+        return None, None, None
+    except KeyError as e:
+        st.error(f"Feature Mismatch Error: Missing feature in input dictionary: {e}. Check your feature names.")
+        return None, None, None
     except Exception as e:
-        st.error(f"An error occurred during prediction: {e}")
+        st.error(f"An unexpected error occurred during prediction: {e}")
+        return None, None, None
 
-st.sidebar.markdown(
-    """
-    ## Deployment Details
+
+# --- Streamlit UI ---
+
+data = load_model()
+
+if data is not None:
+    # Unpack artifacts
+    model = data['model']
+    encoders = data['encoders']
+    target_encoder = data['target_encoder']
+    scaler = data['scaler']
+    loan_mlb = data['loan_mlb']
+    feature_names = data['feature_names']
     
-    * **Model:** Random Forest Classifier
-    * **Model File:** `{MODEL_FILE}`
-    * **Loader:** `pickle`
-    """
+    st.title("💳 Credit Score Classification App (Loan Types Included)")
+    st.markdown("Use the form below to input customer data and predict their credit score (Good, Standard, or Poor).")
+    st.markdown("---")
 
-)
+    # Safely extract options for select boxes
+    occupation_options = encoders['Occupation'].classes_
+    credit_mix_options = encoders['Credit_Mix'].classes_
+    payment_min_options = encoders['Payment_of_Min_Amount'].classes_
+    payment_behaviour_options = encoders['Payment_Behaviour'].classes_
+    loan_types = loan_mlb.classes_
 
+
+    # Create a form for input
+    with st.form("prediction_form"):
+        
+        # --- INPUT SECTION 1: NUMERIC & BASIC CATEGORICAL ---
+        st.subheader("Financial & Demographic Details")
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            age = st.slider("Age", min_value=18, max_value=100, value=30)
+            annual_income = st.number_input("Annual Income ($)", min_value=0.0, value=50000.0, step=1000.0)
+            monthly_salary = st.number_input("Monthly Inhand Salary ($)", min_value=0.0, value=4000.0, step=100.0)
+            occupation = st.selectbox("Occupation", occupation_options)
+            
+        with col2:
+            num_bank_accounts = st.number_input("Num Bank Accounts", min_value=0, value=2)
+            num_credit_cards = st.number_input("Num Credit Cards", min_value=0, value=3)
+            interest_rate = st.number_input("Interest Rate (%)", min_value=0, value=5)
+            num_loans = st.number_input("Num of Loans", min_value=0, value=1)
+            
+        with col3:
+            outstanding_debt = st.number_input("Outstanding Debt ($)", min_value=0.0, value=1000.0)
+            credit_utilization = st.slider("Credit Utilization Ratio (%)", min_value=0.0, max_value=100.0, value=30.0)
+            credit_history_years = st.number_input("Credit History (Years)", min_value=0, value=5)
+            credit_mix = st.selectbox("Credit Mix", credit_mix_options)
+            
+        # --- INPUT SECTION 2: PAYMENT BEHAVIOR ---
+        st.subheader("Payment and Debt Behavior")
+        pcol1, pcol2, pcol3 = st.columns(3)
+        
+        with pcol1:
+            delay_from_due = st.number_input("Avg Delay from Due Date (Days)", min_value=0, value=5)
+            num_delayed_payment = st.number_input("Num Delayed Payments", min_value=0, value=2)
+        with pcol2:
+            changed_credit_limit = st.number_input("Changed Credit Limit ($)", value=0.0)
+            num_credit_inquiries = st.number_input("Num Credit Inquiries", min_value=0, value=1)
+        with pcol3:
+            payment_min = st.selectbox("Payment of Min Amount", payment_min_options)
+            payment_behaviour = st.selectbox("Payment Behaviour", payment_behaviour_options)
+        
+        # --- INPUT SECTION 3: LOAN TYPES ---
+        st.subheader("Types of Active Loans")
+        selected_loans = st.multiselect(
+            "Select all active loan types:",
+            options=loan_types,
+            default=[]
+        )
+            
+        submit = st.form_submit_button("Predict Credit Score", type="primary")
+
+    if submit:
+        # Collect all inputs into a single dictionary
+        input_data = {
+            'age': age, 'annual_income': annual_income, 'monthly_salary': monthly_salary, 'occupation': occupation,
+            'num_bank_accounts': num_bank_accounts, 'num_credit_cards': num_credit_cards, 'interest_rate': interest_rate,
+            'num_loans': num_loans, 'outstanding_debt': outstanding_debt, 'credit_utilization': credit_utilization,
+            'credit_history_years': credit_history_years, 'credit_mix': credit_mix, 'delay_from_due': delay_from_due,
+            'num_delayed_payment': num_delayed_payment, 'changed_credit_limit': changed_credit_limit,
+            'num_credit_inquiries': num_credit_inquiries, 'payment_min': payment_min, 'payment_behaviour': payment_behaviour,
+            'selected_loans': selected_loans, # Pass the list of selected loans
+        }
+
+        with st.spinner('Calculating prediction...'):
+            class_name, probability, classes = predict_score(input_data, model, encoders, target_encoder, scaler, loan_mlb, feature_names)
+
+        if class_name:
+            # --- DISPLAY RESULTS ---
+            st.success(f"Predicted Credit Score: **{class_name}**")
+            
+            # Visualize Probabilities
+            st.subheader("Prediction Probabilities")
+            
+            # Flatten the probability array for DataFrame creation
+            if probability.shape[0] == 1:
+                prob_data = probability[0]
+            else:
+                prob_data = probability.flatten()
+
+            # Create DataFrame for display
+            prob_df = pd.DataFrame(prob_data, index=classes, columns=['Probability'])
+            
+            # Display table with formatting
+            st.dataframe(
+                prob_df.sort_values(by='Probability', ascending=False)
+                .style.format({'Probability': "{:.2%}"})
+            )
+            
+            # Display bar chart
+            st.bar_chart(prob_df.sort_values(by='Probability', ascending=False), color="#008080")

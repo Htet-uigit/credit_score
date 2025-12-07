@@ -5,12 +5,8 @@ import joblib
 import os
 from sklearn.preprocessing import LabelEncoder
 
-# --- Configuration ---
-# Ensure your model file is named 'model.pkl' and saved with joblib.
 MODEL_FILE = 'model.pkl' 
 
-# Define relative paths for the result images
-# IMPORTANT: These files MUST be placed in the same directory as this app.py file!
 IMAGE_PATHS = {
     'Good': 'good.jpg',     
     'Poor': 'poor.jpg',     
@@ -46,13 +42,11 @@ def load_model():
         st.error(f"Error loading model using joblib: {e}. Check if the model file '{MODEL_FILE}' was saved correctly.")
         return None
 
-# Load all artifacts immediately
 ARTIFACTS = load_model()
 
 if ARTIFACTS is None:
     st.stop()
 
-# Extract components from the loaded dictionary
 model = ARTIFACTS['model']
 encoders = ARTIFACTS['encoders']
 target_encoder = ARTIFACTS['target_encoder']
@@ -112,10 +106,8 @@ def display_prediction_result(prediction_label):
         </div>
         """
     
-    # 1. Get the path for the correct image
     image_path = IMAGE_PATHS.get(prediction_label)
     
-    # 2. Set up the result display in two columns
     result_col, image_col = st.columns([1, 1])
 
     with result_col:
@@ -141,10 +133,8 @@ def display_prediction_result(prediction_label):
             
     st.markdown("---") 
     
-    # 3. Add Recommendation Section below the result
     st.header("📈 Actionable Recommendations")
     
-    # --- Define DO'S and DON'TS content ---
     if prediction_label == 'Good':
         st.subheader("MAINTENANCE MODE: Protect Your Excellent Score")
         dos = """
@@ -181,7 +171,7 @@ def display_prediction_result(prediction_label):
         * Ignore calls or letters from creditors, as communication is key to negotiation.
         """
         
-    # --- Display DO'S and DON'TS in styled boxes ---
+    # Display DO'S and DON'TS in styled boxes 
     do_col, dont_col = st.columns(2)
 
     with do_col:
@@ -192,7 +182,6 @@ def display_prediction_result(prediction_label):
         
     st.markdown("---") # Final separator
 
-# --- 3. Streamlit UI and Prediction Logic ---
 
 st.set_page_config(
     page_title="Credit Score Predictor",
@@ -272,7 +261,6 @@ st.markdown("---")
 
 with st.form("prediction_form"):
     
-    # 1. Personal & Financial Information Expander
     with st.expander("👤 Personal & Financial Information", expanded=True):
         st.markdown("Enter basic demographic and income details.")
         col1, col2 = st.columns(2)
@@ -308,7 +296,6 @@ with st.form("prediction_form"):
             input_data['Credit_Utilization_Ratio'] = st.slider("Credit Utilization Ratio (%)", min_value=0.0, max_value=100.0, value=35.0, step=0.1, key='utilization')
             input_data['Credit_History_Age'] = st.number_input("Credit History Age (Months)", min_value=0, value=100, key='history_age')
 
-    # 3. Payment Behavior Expander
     with st.expander("🕰️ Payment Behavior & Balances", expanded=False):
         st.markdown("Detail your monthly payments, investments, and account behavior.")
         col5, col6 = st.columns(2)
@@ -324,7 +311,6 @@ with st.form("prediction_form"):
             input_data['Amount_invested_monthly'] = st.number_input("Amount Invested Monthly ($)", min_value=0.0, max_value=5000.0, value=200.0, step=10.0, key='invested')
             input_data['Monthly_Balance'] = st.number_input("Monthly Balance ($)", min_value=0.0, max_value=50000.0, value=3000.0, step=100.0, key='balance')
             
-    # Ensure all features are present before submission
     for feature in FEATURE_NAMES:
         if feature not in input_data:
             input_data[feature] = 0.0

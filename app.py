@@ -339,6 +339,11 @@ if submit_button:
     except Exception as e:
         st.error(f"An error occurred during prediction: {e}")
 
+
+st.sidebar.subheader("Owner's Information")
+st.sidebar.write(f"*Name:* Htet Myat Phone Naing")
+st.sidebar.write(f"*Student ID:* PIUS20230054")
+
 st.sidebar.markdown(
 
     """
@@ -350,7 +355,3 @@ st.sidebar.markdown(
     """
 )
 
-
-st.sidebar.subheader("Owner's Information")
-st.sidebar.write(f"*Name:* Htet Myat Phone Naing")
-st.sidebar.write(f"*Student ID:* PIUS20230054")

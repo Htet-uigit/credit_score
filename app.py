@@ -340,6 +340,10 @@ if submit_button:
         st.error(f"An error occurred during prediction: {e}")
 
 st.sidebar.markdown(
+
+st.sidebar.subheader("Owner's Information")
+st.sidebar.write(f"*Name:* Htet Myat Phone Naing")
+st.sidebar.write(f"*Student ID:* PIUS20230054")
     """
     ## 🛠️ Deployment Details
     
@@ -348,3 +352,5 @@ st.sidebar.markdown(
     * **Loader:** `joblib`
     """
 )
+
+
